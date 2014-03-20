@@ -1,0 +1,233 @@
+!!! 5
+%html{:lang => "en"}
+  %head
+    %meta{:charset => "utf-8"}
+    %title Turbolinks
+    %meta{:content => "A framework for easily creating beautiful presentations using HTML", :name => "description"}
+    %meta{:content => "Megan Bowra-Dean <megan@rabidtech.co.nz>", :name => "author"}
+    %meta{:content => "yes", :name => "apple-mobile-web-app-capable"}
+    %meta{:content => "black-translucent", :name => "apple-mobile-web-app-status-bar-style"}
+    %meta{:content => "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no", :name => "viewport"}
+    %link{:href => "css/reveal.min.css", :rel => "stylesheet"}
+    %link#theme{:href => "css/theme/night.css", :rel => "stylesheet"}
+    / For syntax highlighting
+    %link{:href => "lib/css/zenburn.css", :rel => "stylesheet"}
+    / If the query includes 'print-pdf', use the PDF print sheet
+    :javascript
+      document.write( '<link rel="stylesheet" href="css/print/' + ( window.location.search.match( /print-pdf/gi ) ? 'pdf' : 'paper' ) + '.css" type="text/css" media="print">' );
+    /[if lt IE 9]
+      <script src="lib/js/html5shiv.js"></script>
+  %body
+    .reveal
+      / Any section element inside of this container is displayed as a slide
+      .slides
+        %section
+          %h1 Turbolinks
+          %h2 More like TurboSTINKS
+
+        %section
+          %h2 What is Turbolinks
+          %ul
+            %li.fragment Introduced as a default gem in Rails 4
+            %li.fragment Uses AJAX to swap out title and body of page when navigating
+            %li.fragment Provides caching
+            %li.fragment Can speed up page load on JS/CSS heavy sites up to 2x
+
+        %section
+          %h2 Normal Page Lifecycle
+          %ul
+            %li
+              Someone clicks on a link
+              %br
+              %img.fragment{src: 'img/nuke.jpg', height: "150px"}
+            %li.fragment All page context is lost
+            %li.fragment Standard lifecycle callbacks are called (e.g. document ready as used by jQuery)
+
+        %section
+          %h2 Turbolinks Page Lifecycle
+          %ul
+            %li &lt;title&gt; and &lt;body&gt; elements have their contents replaced removing any child elements from the DOM
+            %li However the JavaScript engine's context is preserved.
+            %li Since we can't rely on the standard lifecycle alternate callbacks are provided
+
+        %section
+          %ul
+            %li
+              %code
+                page:before-change
+              &mdash; a Turbolinks-enabled link has been clicked
+            %li
+              %code
+                page:fetch
+              &mdash; starting to fetch a new target page
+            %li
+              %code
+                page:receive
+              &mdash; the page has been fetched from the server, but not yet parsed
+            %li
+              %code
+                page:change
+              &mdash; the page has been parsed and changed to the new version
+            %li
+              %code
+                page:update
+              &mdash; is triggered whenever page:change is PLUS on jQuery's ajaxSucess
+            %li
+              %code
+                page:load
+              &mdash; is fired at the end of the loading process.
+
+        %section
+          %h2 Third Party Scripts
+          %h3 i.e. where this all falls down
+
+        %section
+          %ul
+            %li
+              Third party scripts like Facebook's JS SDK, Google Maps etc. expect the standard page behaviour
+            %li
+              Most of the time will not reinitialise between Turbolinks page changes
+
+        %section
+          %p
+            This requires us to hunt down initialisation code in obfuscated, minified scripts in order to hook them into Turbolinks' page:load event.
+          %p
+            %em
+              Even doing that isn't enough.
+
+        %section
+          %ul
+            %li
+              Since JavaScript context is preserved, any objects created in that context are preserved across page changes.
+            %li
+              This leaves garbage state and dead DOM references for the third party scripts.
+
+        %section
+          %h2 This way leads madness
+          %p
+            The
+            %em Turbolinks Compatibility project
+            provides some examples of popular third party scripts made compatible with Turbolinks
+
+        %section
+          %h2 Facebook JS SDK
+          %p Official code
+          %pre
+            %code
+              :escaped
+                <div id="fb-root"></div>
+                <script>
+                  (function(d, s, id){
+                    var js, fjs = d.getElementsByTagName(s)[0];
+                    if (d.getElementById(id)) return;
+                    js = d.createElement(s); js.id = id;
+                    js.src = "//connect.facebook.net/en_US/all.js#xfbml=1";
+                    fjs.parentNode.insertBefore(js, fjs);
+                  }(document, 'script', 'facebook-jssdk'));
+                </script>
+
+        %section
+          %section
+            %h2 Facebook JS SDK
+            %p Turbolinks compatible code (Coffeescript)
+            %pre
+              %code.language-coffeescript
+                :preserve
+                  fb_root = null
+                  fb_events_bound = false
+
+                  $ ->
+                    loadFacebookSDK()
+                    bindFacebookEvents() unless fb_events_bound
+
+                  bindFacebookEvents = ->
+                    $(document)
+                      .on('page:fetch', saveFacebookRoot)
+                      .on('page:change', restoreFacebookRoot)
+                      .on('page:load', ->
+                        FB?.XFBML.parse()
+                      )
+                    fb_events_bound = true
+          %section
+            %p Continued
+            %pre
+              %code.language-coffeescript
+                :preserve
+                  saveFacebookRoot = ->
+                    fb_root = $('#fb-root').detach()
+
+                  restoreFacebookRoot = ->
+                    if $('#fb-root').length > 0
+                      $('#fb-root').replaceWith fb_root
+                    else
+                      $('body').append fb_root
+
+                  loadFacebookSDK = ->
+                    window.fbAsyncInit = initializeFacebookSDK
+                    $.getScript("//connect.facebook.net/en_US/all.js#xfbml=1")
+          %section
+            %p Continued
+            %pre
+              %code.language-coffeescript
+                :preserve
+                  initializeFacebookSDK = ->
+                    FB.init
+                      appId     : 'YOUR_APP_ID'
+                      channelUrl: '//WWW.YOUR_DOMAIN.COM/channel.html'
+                      status    : true
+                      cookie    : true
+                      xfbml     : true
+
+        %section
+          %h3 There are still issues even when thinking everything is correctly initialised
+
+        %section
+          %p Using the example on Turbolinks Compatibility for the ShareThis social media library, Rabid found that URLs were not being detected by the library correctly. ShareThis always thought it was on the page last hard refreshed by the client.
+
+        %section
+          %h2 Summary
+          %ul
+            %li Turbolinks does improve performance of client heavy web apps.
+            %li A few third party scripts work, with a lot of extra work on the part of the developer.
+            %li Others just don't or quickly become too maintenance heavy to justify the performance increase.
+            %li
+              %span{style: "text-decoration: line-through;"}
+                Turbolinks ate my homework, kicked my dog and killed my brother
+
+        %section
+          %p
+            Good news is, it's easy to get rid of. Remove the references to it from your Gemfile and application.js and you're home free.
+
+        %section
+          %h2 Megan Bowra-Dean
+          %h4 megan@rabidtech.co.nz
+          %h4 @megahbite
+
+    %script{:src => "lib/js/head.min.js"}
+    %script{:src => "js/reveal.js"}
+    :javascript
+      // Full list of configuration options available here:
+      // https://github.com/hakimel/reveal.js#configuration
+      Reveal.initialize({
+        controls: true,
+        progress: true,
+        history: true,
+        center: true,
+
+        theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+        transition: Reveal.getQueryHash().transition || 'default', // default/cube/page/concave/zoom/linear/fade/none
+
+        // Parallax scrolling
+        // parallaxBackgroundImage: 'https://s3.amazonaws.com/hakim-static/reveal-js/reveal-parallax-1.jpg',
+        // parallaxBackgroundSize: '2100px 900px',
+
+        // Optional libraries used to extend on reveal.js
+        dependencies: [
+          { src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+          { src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+          { src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+          { src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+          { src: 'plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+          { src: 'plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+        ]
+      });
